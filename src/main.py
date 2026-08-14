@@ -18,6 +18,7 @@ def main() :
 
     logger.info("Starting profile picture update")
 
+    tmp_path = None
     try :
         source = image_selector.select_image()
         logger.info("Selected image source: %s", source)
@@ -36,6 +37,10 @@ def main() :
     except Exception as err :
         logger.exception("Profile picture update failed: %s", err)
         raise
+    finally :
+        if tmp_path and tmp_path.exists() :
+            tmp_path.unlink()
+            logger.debug("Cleaned up temporary file %s", tmp_path)
 
 
 if __name__ == "__main__" :
