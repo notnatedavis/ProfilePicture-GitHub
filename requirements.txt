@@ -3,3 +3,5 @@
 requests>=2.31.0
 Pillow>=10.0.0
 python-dotenv>=1.0.0
+pyotp>=2.9.0
+playwright>=1.40.0

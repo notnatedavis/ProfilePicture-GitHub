@@ -7,7 +7,7 @@ from pathlib import Path
 import config
 import image_selector
 import image_processor
-import github_client
+import web_uploader
 
 def main() :
     logging.basicConfig(
@@ -31,9 +31,7 @@ def main() :
         image_processor.save_image(processed, tmp_path)
         logger.info("Processed image saved to %s", tmp_path)
 
-        # publish the processed image to a public URL in the repository, then update avatar
-        avatar_url = github_client.publish_image_to_repo(tmp_path)
-        github_client.update_avatar(avatar_url)
+        web_uploader.upload_avatar(tmp_path)
         logger.info("Profile picture update completed")
 
     except Exception as err :

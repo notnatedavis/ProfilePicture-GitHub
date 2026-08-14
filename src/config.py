@@ -9,6 +9,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 GH_TOKEN = os.getenv("GH_TOKEN")
+GH_USERNAME = os.getenv("GH_USERNAME")
+GH_PASSWORD = os.getenv("GH_PASSWORD")
+GH_TOTP_SECRET = os.getenv("GH_TOTP_SECRET")
 PINTEREST_SOURCE_BOARD = os.getenv("PINTEREST_SOURCE_BOARD")
 PROFILE_PICTURE_DIR = Path(os.getenv("PROFILE_PICTURE_DIR", "assets/profile_pictures"))
 IMAGE_SIZE = int(os.getenv("IMAGE_SIZE", "512"))

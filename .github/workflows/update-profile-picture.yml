@@ -1,6 +1,6 @@
 # .github/workflows/update-profile-picture.yml
 
-name: Update GitHub Profile Picture (Test3)
+name: runWorkflow (Test1)
 
 on:
   schedule:
@@ -24,10 +24,15 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          python -m playwright install chromium --with-deps
 
-      - name: Update profile picture
+      - name: Run profile picture update
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          PINTEREST_SOURCE_BOARD: ${{ secrets.PINTEREST_SOURCE_BOARD }}
+          GH_USERNAME: ${{ secrets.GH_USERNAME }}
+          GH_PASSWORD: ${{ secrets.GH_PASSWORD }}
+          GH_TOTP_SECRET: ${{ secrets.GH_TOTP_SECRET }}
+          PINTEREST_SOURCE_BOARD: ${{ vars.PINTEREST_SOURCE_BOARD }}
+          PROFILE_PICTURE_DIR: ${{ vars.PROFILE_PICTURE_DIR }}
         run: python src/main.py
