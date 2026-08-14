@@ -51,7 +51,7 @@ This repository automates updating your GitHub profile picture on an interval (e
 
 4. Push and Enjoy
 
-   Once the workflow file (`.github/workflows/update-profile-picture.yml`) is present and the secrets are set, GitHub Actions will automatically run the update daily at midnight UTC. You can also trigger it manually from the **Actions** tab.
+   Once the workflow file (`.github/workflows/update-profile-picture.yml`) is present and the secrets are set, GitHub Actions will automatically run the update daily at midnight UTC. You can also trigger it manually from the **Actions** tab → **All workflows** → (select) **repoWorkflow** → **Run workflow**
 
 ## Configuration
 
