@@ -1,6 +1,6 @@
 # ProfilePicture-GitHub
 
-a repository focused on setting profile picture for GitHub
+a repository focused on setting profile picture for GitHub. 
 
 ## Table of Contents
 
