@@ -28,7 +28,7 @@ This repository automates updating your GitHub profile picture on an interval (e
 
 1. Clone repo & cd in (push locally to github)
    ```bash
-   git clone https://github.com/your-username/ProfilePicture-GitHub.git
+   git clone https://github.com/notnatedavis/ProfilePicture-GitHub.git
    cd ProfilePicture-GitHub
    ```
 
@@ -44,7 +44,7 @@ This repository automates updating your GitHub profile picture on an interval (e
 3. Add Secrets to Your Repository
 
    - Go to your repository → **Settings** → **Secrets and variables** → **Actions**
-   - Add a new secret named `GH_TOKEN` with the PAT value
+   - Add a new Repository secret named `GH_TOKEN` with the PAT value
    - (Optional) Add a secret named `PINTEREST_SOURCE_BOARD` with your public Pinterest board URL
   
    > The built-in `GITHUB_TOKEN` does not have the necessary `user` scope to update avatar so use custom PAT stored as `GH_TOKEN` to avoid confusion

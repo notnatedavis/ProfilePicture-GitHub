@@ -13,14 +13,14 @@ def update_avatar(image_path) :
 
     # uses the GitHub REST API (PATCH /user) with a base64-encoded image
     # requires a personal access token with `user` scope
-    if not config.GITHUB_TOKEN :
-        raise ValueError("GITHUB_TOKEN is not set. Check .env or GitHub Secrets.")
+    if not config.GH_TOKEN :
+        raise ValueError("GH_TOKEN is not set. Check .env or GitHub Secrets.")
 
     with open(image_path, "rb") as f :
         avatar_base64 = base64.b64encode(f.read()).decode("utf-8")
 
     headers = {
-        "Authorization": f"token {config.GITHUB_TOKEN}",
+        "Authorization": f"token {config.GH_TOKEN}",
         "Accept": "application/vnd.github.v3+json",
     }
     data = {"avatar_url": f"data:image/png;base64,{avatar_base64}"}
