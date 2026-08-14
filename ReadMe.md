@@ -7,6 +7,7 @@ a repository focused on setting profile picture for GitHub.
 - [Introduction](#introduction)
 - [Features](#features)
 - [Usage](#usage)
+- [Testing](#testing)
 - [Configuration](#Configuration)
 - [Project-Structure](#Project-Structure)
 - [Additional-Information](#Additional-Info)
@@ -52,6 +53,33 @@ This repository automates updating your GitHub profile picture on an interval (e
 4. Push and Enjoy
 
    Once the workflow file (`.github/workflows/update-profile-picture.yml`) is present and the secrets are set, GitHub Actions will automatically run the update daily at midnight UTC. You can also trigger it manually from the **Actions** tab → **All workflows** → (select) **repoWorkflow** → **Run workflow**
+
+## Testing
+
+1. Set up .env w/ credentials
+
+2. Set up environment
+   ```bash
+   pyenv install 3.10.0 # if not already installed
+   pyenv local 3.10.0   # sets in use
+
+   python -m venv venv310
+   
+   venv310\Scripts\activate # Windows
+   . # or 
+   source venv310/bin/activate # macOS/Linux
+   ```
+
+3. Install dependencies
+   ```bash
+   pip install -r requirements.txt
+   python -m playwright install chromium --with-deps
+   ```
+
+4. Start the application
+   ```bash
+   python src/main.py
+   ```
 
 ## Configuration
 
