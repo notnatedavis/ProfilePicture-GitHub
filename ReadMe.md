@@ -26,38 +26,41 @@ This repository automates updating your GitHub profile picture on an interval (e
 
 ## Usage 
 
-1. Clone repo & cd in
+1. Clone repo & cd in (push locally to github)
    ```bash
    git clone https://github.com/your-username/ProfilePicture-GitHub.git
    cd ProfilePicture-GitHub
    ```
 
-2. Create a `.env` file based on `.env.example`:
-   ```bash
-   cp .env.example .env
-   # edit .env with GitHub token & Pinterest board URL (optional)
-   ```
+2. Create a Personal Access Token (PAT)
 
-3. Add your local fallback images to `assets/profile_pictures/`
+   - Go to [GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)](https://github.com/settings/tokens)
+   - Click `Generate new token (classic)`
+   - Name it `ProfilePicture-Updater`
+   - Set expiration as desired (long as possible)
+   - Select `user` scope (IMPORTANT)
+   - Generate and copy the token (save temporarily)
 
-4. Run the script locally :
-   ```bash
-   pip install -r requirements.txt
-   python src/main.py
-   ```
+3. Add Secrets to Your Repository
 
-5. To automate, push the repository to GitHub and configure the following secrets in the repository settings :
-   - `GITHUB_TOKEN` – a personal access token with `user` scope
-   - `PINTEREST_SOURCE_BOARD` – (optional) URL to a public Pinterest board
+   - Go to your repository → **Settings** → **Secrets and variables** → **Actions**
+   - Add a new secret named `GH_TOKEN` with the PAT value
+   - (Optional) Add a secret named `PINTEREST_SOURCE_BOARD` with your public Pinterest board URL
+  
+   > The built-in `GITHUB_TOKEN` does not have the necessary `user` scope to update avatar so use custom PAT stored as `GH_TOKEN` to avoid confusion
 
-   GitHub Action will then run daily at midnight UTC
+4. Push and Enjoy
+
+   Once the workflow file (`.github/workflows/update-profile-picture.yml`) is present and the secrets are set, GitHub Actions will automatically run the update daily at midnight UTC. You can also trigger it manually from the **Actions** tab.
 
 ## Configuration
 
-- `GITHUB_TOKEN` – required. Personal access token with `user` scope
+- `GH_TOKEN` – required. Personal access token with `user` scope
 - `PINTEREST_SOURCE_BOARD` – optional. Must be a valid, public Pinterest board URL
 - `PROFILE_PICTURE_DIR` – optional. Local directory for fallback images (default `assets/profile_pictures`)
 - `IMAGE_SIZE` – optional. Target avatar size in pixels (default 512)
+
+- **GitHub Actions** : Add the corresponding secrets or variables under repository settings
 
 ## Project-Structure
 
@@ -85,4 +88,4 @@ ProfilePicture-GitHub/
 
 ## Additional-Info
 
-This section can be used to log notes about the project scope, known limitations, or future enhancements.
+This section can be used to log notes about the project scope, known limitations, or future enhancements
