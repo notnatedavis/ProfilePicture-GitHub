@@ -1,6 +1,6 @@
 # .github/workflows/update-profile-picture.yml
 
-name: runWorkflow (Test1)
+name: runWorkflow (Test3)
 
 on:
   schedule:
@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 jobs:
-  update-avatar:
+  runWorkflow:
     runs-on: ubuntu-latest
 
     steps:
