@@ -1,0 +1,27 @@
+# .github/workflows/update-profile-picture.yml
+
+name: Update Profile Picture
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # daily at midnight UTC
+  workflow_dispatch:
+
+jobs:
+  update-avatar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run update script
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PINTEREST_SOURCE_BOARD: ${{ secrets.PINTEREST_SOURCE_BOARD }}
+          PROFILE_PICTURE_DIR: ${{ vars.PROFILE_PICTURE_DIR || 'assets/profile_pictures' }}
+          IMAGE_SIZE: ${{ vars.IMAGE_SIZE || '512' }}
+        run: python src/main.py
