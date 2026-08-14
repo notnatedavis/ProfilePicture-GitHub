@@ -60,14 +60,14 @@ This repository automates updating your GitHub profile picture on an interval (e
 
 2. Set up environment
    ```bash
-   pyenv install 3.10.0 # if not already installed
-   pyenv local 3.10.0   # sets in use
+   pyenv install 3.12.13 # if not already installed
+   pyenv local 3.12.13   # sets in use
 
-   python -m venv venv310
+   python -m venv venv312
    
-   venv310\Scripts\activate # Windows
+   venv312\Scripts\activate # Windows
    . # or 
-   source venv310/bin/activate # macOS/Linux
+   source venv312/bin/activate # macOS/Linux
    ```
 
 3. Install dependencies
@@ -97,19 +97,28 @@ ProfilePicture-GitHub/
 ├── .github/
 │   └── workflows/
 │       └── update-profile-picture.yml
+│
 ├── assets/
 │   └── profile_pictures/
+│       ├── fallbackTest.jpg
 │       └── .gitkeep
+│
+├── docs/
+│   └── ToDo.md
+│ 
 ├── src/
 │   ├── __init__.py
 │   ├── config.py
 │   ├── github_client.py
 │   ├── image_processor.py
 │   ├── image_selector.py
+│   ├── main.py
 │   ├── pinterest_api.py
-│   └── main.py
+│   └── web_uploader.py
+│ 
 ├── .env.example
 ├── .gitignore
+├── .python-version
 ├── ReadMe.md
 └── requirements.txt
 ```

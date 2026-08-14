@@ -4,6 +4,7 @@
 
 # Project Specific
 .env
+venv312
 __pycache__/
 *.py[cod]
 .venv/
@@ -11,3 +12,4 @@ venv/
 *.log
 .DS_Store/
 .DS_Store
+# .python-version (keep)

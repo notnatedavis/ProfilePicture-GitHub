@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 # --- URLs ---
 GITHUB_LOGIN_URL = "https://github.com/login"
+GITHUB_DASHBOARD_URL = "https://github.com/"
 GITHUB_SETTINGS_PROFILE_URL = "https://github.com/settings/profile"
 TWO_FACTOR_URL_PATTERN = "**/sessions/two-factor*"
 CHALLENGE_URL_PATTERNS = [
@@ -22,6 +23,12 @@ CHALLENGE_URL_PATTERNS = [
     "**/sessions/device*",          # Device verification
     "**/sessions/phone*",           # Phone verification
 ]
+
+# --- Coordinate fallbacks (fill in manually if automatic selectors fail) ---
+# These are (x, y) coordinates on the page. Use DEBUG_PW=1 to find them.
+COORD_EDIT_BUTTON = (100, 200) # Click on the avatar edit button
+COORD_UPLOAD_MENU = (150, 300) # Click on "Upload a photo…" menu item
+COORD_SAVE_BUTTON = (200, 400) # Click on "Set new profile picture"
 
 
 def _generate_totp_code():
@@ -57,35 +64,30 @@ def _save_debug_artifacts(page, prefix="failure"):
         logger.warning("Could not save debug artifacts: %s", e)
 
 
-def _handle_post_login_challenges(page):
+def _handle_challenges(page):
     """
-    Detect and attempt to dismiss common security challenges after login.
-    Returns True if we successfully reached the settings page, False otherwise.
+    Detect and attempt to dismiss common security challenges.
+    Returns True if we are successfully logged in and not stuck on a challenge page.
     """
-    # Wait for the page to settle after login
+    # Wait for the page to settle
     page.wait_for_load_state("networkidle")
 
-    # Check if we are already on the settings page (success)
-    if "/settings/profile" in page.url:
-        return True
-
-    # Check if we are back at login (failure)
+    # If we are back at login, authentication failed
     if "/login" in page.url:
         logger.error("Redirected back to login page – authentication failed.")
         return False
 
-    # Handle 2FA (already handled in _login, but we check again)
-    if "two-factor" in page.url:
-        logger.warning("2FA page detected after login – possibly not handled.")
-        return False
+    # If we are on the dashboard or settings, we are good
+    if page.url.rstrip("/") in (GITHUB_DASHBOARD_URL.rstrip("/"), GITHUB_SETTINGS_PROFILE_URL.rstrip("/")):
+        logger.debug("Logged in successfully (dashboard or settings).")
+        return True
 
-    # Handle known challenge URLs
+    # Known challenge pages
     for pattern in CHALLENGE_URL_PATTERNS:
         if pattern.replace("**", "") in page.url:
             logger.info("Detected challenge page: %s", page.url)
 
             # Try to click any button with text "Skip", "Continue", "Verify", etc.
-            # These are common for device verification and "new sign-in" prompts.
             buttons = page.locator(
                 "button:has-text('Skip'), "
                 "button:has-text('Continue'), "
@@ -95,15 +97,14 @@ def _handle_post_login_challenges(page):
                 "button:has-text('Confirm')"
             )
             try:
-                # Click the first visible button
                 buttons.first.click(timeout=5000)
                 # Wait for navigation away from challenge
                 page.wait_for_url(
-                    lambda url: "/settings/profile" in url or "/login" not in url,
+                    lambda url: "/login" not in url,
                     timeout=10000,
                 )
-                if "/settings/profile" in page.url:
-                    return True
+                # Re-check after navigation
+                return _handle_challenges(page)
             except PlaywrightTimeoutError:
                 logger.warning("Could not automatically dismiss challenge.")
 
@@ -111,17 +112,14 @@ def _handle_post_login_challenges(page):
             logger.error("Manual intervention required for challenge: %s", page.url)
             return False
 
-    # If we are on an unknown page, log it and try to navigate to settings directly
-    logger.warning("Unknown page after login: %s – attempting to go to settings", page.url)
+    # Unknown page – try to navigate to dashboard as a fallback
+    logger.warning("Unknown page after login: %s – attempting to go to dashboard", page.url)
     try:
-        page.goto(GITHUB_SETTINGS_PROFILE_URL, wait_until="domcontentloaded")
+        page.goto(GITHUB_DASHBOARD_URL, wait_until="domcontentloaded")
         page.wait_for_load_state("networkidle")
-        if "/settings/profile" in page.url:
-            return True
+        return _handle_challenges(page)
     except Exception:
-        pass
-
-    return False
+        return False
 
 
 def _login(page):
@@ -148,107 +146,30 @@ def _login(page):
     except PlaywrightTimeoutError:
         logger.debug("No 2FA challenge detected")
 
-    # Now handle any post-login challenges (device verification, skip, etc.)
-    if not _handle_post_login_challenges(page):
-        # If we couldn't get to settings, save debug artifacts and raise
+    # Now handle any post-login challenges
+    if not _handle_challenges(page):
         _save_debug_artifacts(page, "login_failure")
         raise RuntimeError(
             "Failed to complete login. A security challenge may require manual action. "
             "Check the saved debug artifacts (screenshot and HTML) for more details."
         )
 
-    # Final verification: we should be on settings
-    if "/settings/profile" not in page.url:
+    # Final verification: we should be on dashboard or settings
+    if "/login" in page.url:
         _save_debug_artifacts(page, "login_failure")
-        raise RuntimeError(f"Login did not reach settings page. Current URL: {page.url}")
+        raise RuntimeError(f"Login failed. Current URL: {page.url}")
 
-    logger.debug("Successfully authenticated and reached settings page")
-
-
-def _is_file_input_visible(page):
-    """Check if the file input for avatar upload is present and attached."""
-    return page.locator("input[type='file']").count() > 0
-
-
-def _wait_for_file_input(page, timeout=10000):
-    """Wait for the file input to become available."""
-    try:
-        page.wait_for_selector("input[type='file']", state="attached", timeout=timeout)
-        return True
-    except PlaywrightTimeoutError:
-        return False
-
-
-def _try_open_avatar_dialog(page):
-    """
-    Attempt to open the avatar upload dialog using multiple strategies.
-    Returns True if the file input becomes available, False otherwise.
-    """
-    # Strategy 1: File input might already be present
-    if _is_file_input_visible(page):
-        logger.debug("File input already present")
-        return True
-
-    # Strategy 2: Click on the avatar image
-    try:
-        logger.debug("Attempting to click avatar image")
-        page.locator("img.avatar").first.click(timeout=5000)
-        if _wait_for_file_input(page):
-            logger.debug("Avatar click opened file input")
-            return True
-    except PlaywrightTimeoutError:
-        logger.debug("Avatar click did not open file input")
-
-    # Strategy 3: Button selectors
-    button_selectors = [
-        "button[aria-label='Edit profile picture']",
-        "button[aria-label='Edit']",
-        "button[aria-label='Upload profile picture']",
-        "a[aria-label='Edit profile picture']",
-        "a[aria-label='Edit']",
-        "button:has-text('Edit')",
-        "a:has-text('Edit')",
-        "button:has(svg)",
-    ]
-    for selector in button_selectors:
-        try:
-            logger.debug(f"Trying button selector: {selector}")
-            page.locator(selector).first.click(timeout=5000)
-            if _wait_for_file_input(page):
-                logger.debug(f"Button selector {selector} opened file input")
-                return True
-        except PlaywrightTimeoutError:
-            continue
-
-    # Strategy 4: Role-based
-    try:
-        logger.debug("Trying role=button with name 'Edit'")
-        page.get_by_role("button", name="Edit").first.click(timeout=5000)
-        if _wait_for_file_input(page):
-            logger.debug("Role button 'Edit' opened file input")
-            return True
-    except PlaywrightTimeoutError:
-        pass
-
-    # Strategy 5: Text fallback
-    try:
-        logger.debug("Trying get_by_text('Edit', exact=False)")
-        page.get_by_text("Edit", exact=False).first.click(timeout=5000)
-        if _wait_for_file_input(page):
-            logger.debug("Text fallback opened file input")
-            return True
-    except PlaywrightTimeoutError:
-        pass
-
-    return False
+    logger.debug("Successfully authenticated and reached %s", page.url)
 
 
 def _upload_profile_picture(page, image_path):
-    """Navigate to profile settings and upload the processed image."""
-    # Ensure we are on the settings page (if not already)
-    if "/settings/profile" not in page.url:
-        page.goto(GITHUB_SETTINGS_PROFILE_URL, wait_until="domcontentloaded")
-        page.wait_for_load_state("networkidle")
+    """
+    Navigate directly to settings and upload the profile picture.
+    Uses role-based clicks first; falls back to manual coordinates if needed.
+    """
+    # Always go directly to the settings page – skip the user menu entirely
+    page.goto(GITHUB_SETTINGS_PROFILE_URL, wait_until="domcontentloaded")
+    page.wait_for_load_state("networkidle")
 
     # Wait for the avatar element to ensure page is fully rendered
     try:
@@ -260,29 +181,60 @@ def _upload_profile_picture(page, image_path):
             "Check debug artifacts for details."
         )
 
-    # Open the upload dialog
-    if not _try_open_avatar_dialog(page):
-        _save_debug_artifacts(page, "upload_dialog_failure")
-        raise RuntimeError(
-            "Unable to open avatar upload dialog. The 'Edit' button may be hidden or "
-            "the page structure has changed. Check the saved screenshot and HTML."
-        )
+    # --- Click the avatar edit button ---
+    username = config.GH_USERNAME
+    edit_button_name = f"@{username} Edit"
+    try:
+        logger.debug(f"Clicking avatar edit button: {edit_button_name}")
+        page.get_by_role("button", name=edit_button_name).click(timeout=10000)
+    except PlaywrightTimeoutError:
+        logger.warning("Role-based click on edit button failed – trying coordinate fallback.")
+        try:
+            x, y = COORD_EDIT_BUTTON
+            page.mouse.click(x, y)
+            logger.debug(f"Clicked edit button at coordinates ({x}, {y})")
+        except Exception as e:
+            _save_debug_artifacts(page, "edit_button_failure")
+            raise RuntimeError(f"Failed to click avatar edit button: {e}")
 
-    # Upload the file
-    file_input = page.locator("input[type='file']").first
-    file_input.wait_for(state="attached", timeout=10000)
-    file_input.set_input_files(str(image_path))
+    # --- Click the "Upload a photo…" menu item ---
+    try:
+        logger.debug("Clicking 'Upload a photo…' menu item")
+        page.get_by_role("menuitem", name="Upload a photo…").click(timeout=5000)
+    except PlaywrightTimeoutError:
+        logger.warning("Role-based click on upload menu failed – trying coordinate fallback.")
+        try:
+            x, y = COORD_UPLOAD_MENU
+            page.mouse.click(x, y)
+            logger.debug(f"Clicked upload menu at coordinates ({x}, {y})")
+        except Exception as e:
+            _save_debug_artifacts(page, "upload_menu_failure")
+            raise RuntimeError(f"Failed to click 'Upload a photo…' menu item: {e}")
 
-    # Confirm upload
-    page.wait_for_selector(
-        "button:has-text('Set new picture'), button:has-text('Save')",
-        timeout=15000,
-    )
-    save_button = page.locator(
-        "button:has-text('Set new picture'), button:has-text('Save')"
-    ).first
-    save_button.click()
-    page.wait_for_load_state("networkidle")
+    # --- Set the input file (using label) ---
+    try:
+        logger.debug(f"Setting input file: {image_path}")
+        page.get_by_label("Upload a photo…").set_input_files(str(image_path))
+    except Exception as e:
+        _save_debug_artifacts(page, "file_input_failure")
+        raise RuntimeError(f"Failed to set input file: {e}")
+
+    # --- Click the "Set new profile picture" button ---
+    try:
+        logger.debug("Clicking 'Set new profile picture' button")
+        page.get_by_role("button", name="Set new profile picture").click(timeout=10000)
+        page.wait_for_load_state("networkidle")
+    except PlaywrightTimeoutError:
+        logger.warning("Role-based click on save button failed – trying coordinate fallback.")
+        try:
+            x, y = COORD_SAVE_BUTTON
+            page.mouse.click(x, y)
+            logger.debug(f"Clicked save button at coordinates ({x}, {y})")
+            page.wait_for_load_state("networkidle")
+        except Exception as e:
+            _save_debug_artifacts(page, "save_button_failure")
+            raise RuntimeError(f"Failed to click 'Set new profile picture' button: {e}")
+
     logger.info("Profile picture uploaded through GitHub web UI")
 
 
@@ -304,7 +256,6 @@ def upload_avatar(image_path):
             _login(page)
             _upload_profile_picture(page, image_path)
         except Exception as e:
-            # On any exception, save debug artifacts before re-raising
             try:
                 _save_debug_artifacts(page, "error")
             except Exception:
@@ -312,7 +263,6 @@ def upload_avatar(image_path):
             raise e
         finally:
             if debug_mode:
-                # Keep browser open for a moment to inspect
                 logger.info("Debug mode: browser will close in 30 seconds. Press Ctrl+C to abort.")
                 time.sleep(30)
             browser.close()
