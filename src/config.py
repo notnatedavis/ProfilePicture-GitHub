@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 # load environment variables from .env file
 load_dotenv()
 
-GH_TOKEN = os.getenv("GH_TOKEN")
 GH_USERNAME = os.getenv("GH_USERNAME")
 GH_PASSWORD = os.getenv("GH_PASSWORD")
 GH_TOTP_SECRET = os.getenv("GH_TOTP_SECRET")

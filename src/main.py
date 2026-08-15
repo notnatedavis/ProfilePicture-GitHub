@@ -7,7 +7,7 @@ from pathlib import Path
 import config
 import image_selector
 import image_processor
-import web_uploader
+import playwright_upload_github
 
 def main() :
     logging.basicConfig(
@@ -31,7 +31,7 @@ def main() :
         image_processor.save_image(processed, tmp_path)
         logger.info("Processed image saved to %s", tmp_path)
 
-        web_uploader.upload_avatar(tmp_path)
+        playwright_upload_github.upload_avatar(tmp_path)
         logger.info("Profile picture update completed")
 
     except Exception as err :

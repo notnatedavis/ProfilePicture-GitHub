@@ -3,8 +3,8 @@
 - update src/web_uploader.py
     - get all coords for points of process
         - pt1 : login (done)
-        - pt2 : post-login -> settings
-        - pt3 : settings -> edit
+        - pt2 : post-login -> .com/settings/profile
+        - pt3 : edit
         - pt4 : Edit -> Upload
         - pt5 : Upload -> fetched image
     - remove old page.locator logic

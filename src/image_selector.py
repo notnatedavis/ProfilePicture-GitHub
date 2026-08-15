@@ -21,7 +21,6 @@ def _get_local_images() :
         if p.suffix.lower() in SUPPORTED_EXTENSIONS
     ]
 
-
 def select_image() :
     # select a profile picture source
 
