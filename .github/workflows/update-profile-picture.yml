@@ -1,6 +1,4 @@
-# .github/workflows/update-profile-picture.yml
-
-name: runWorkflow (Test 1)
+name: runWorkflow (Test 2)
 
 on:
   schedule:
@@ -33,6 +31,7 @@ jobs:
           GH_USERNAME: ${{ secrets.GH_USERNAME }}
           GH_PASSWORD: ${{ secrets.GH_PASSWORD }}
           GH_TOTP_SECRET: ${{ secrets.GH_TOTP_SECRET }}
-          PINTEREST_SOURCE_BOARD: ${{ vars.PINTEREST_SOURCE_BOARD }}
-          PROFILE_PICTURE_DIR: ${{ vars.PROFILE_PICTURE_DIR }}
+          # use variables first, fall back to secrets for compatibility.
+          PINTEREST_SOURCE_BOARD: ${{ vars.PINTEREST_SOURCE_BOARD || secrets.PINTEREST_SOURCE_BOARD }}
+          PROFILE_PICTURE_DIR: ${{ vars.PROFILE_PICTURE_DIR || secrets.PROFILE_PICTURE_DIR }}
         run: python src/main.py
