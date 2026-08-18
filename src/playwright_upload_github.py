@@ -27,7 +27,8 @@ logger = logging.getLogger(__name__)
 #    a. fill GitHub username and password
 #    b. complete two-factor authentication when challenged
 #    c. dismiss security challenges when possible
-#    d. wait briefly, then open the profile settings page directly
+#    d. wait until we are definitely authenticated
+#    e. open the profile settings page directly
 #
 # 3. _upload_profile_picture(page, image_path) changes the avatar :
 #    a. navigate to GitHub settings/profile
@@ -52,6 +53,7 @@ CHALLENGE_URL_PATTERNS = [
 
 # --- Post-login navigation ---
 LOGIN_SETTLE_SECONDS = 4  # seconds to wait after login before navigating to settings
+LOGIN_TIMEOUT_SECONDS = 20  # total time to wait for a fully authenticated page
 
 # --- Viewport and browser configuration ---
 # Use the exact same viewport locally and in GitHub Actions so coordinate
@@ -93,6 +95,14 @@ def _is_debug_mode():
     # read the DEBUG_PW variable
     # compare against common truthy string values
     return os.getenv("DEBUG_PW", "").lower() in ("1", "true", "yes")
+
+
+def _is_authenticated(page) :
+    # return True when the current page is a known authenticated GitHub page
+    return page.url.rstrip("/") in (
+        GITHUB_DASHBOARD_URL.rstrip("/"),
+        GITHUB_SETTINGS_PROFILE_URL.rstrip("/"),
+    )
 
 
 def _set_avatar_size(url, size=GITHUB_AVATAR_SIZE) :
@@ -157,7 +167,7 @@ def _handle_challenges(page):
         return False
 
     # if on dashboard or settings, we are logged in
-    if page.url.rstrip("/") in (GITHUB_DASHBOARD_URL.rstrip("/"), GITHUB_SETTINGS_PROFILE_URL.rstrip("/")):
+    if _is_authenticated(page):
         logger.debug(logging_config.block("Logged in successfully (dashboard or settings)."))
         return True
 
@@ -192,9 +202,46 @@ def _handle_challenges(page):
             logger.error(logging_config.label_value("Manual intervention required for challenge", page.url))
             return False
 
-    # unknown page – treat as authenticated; _login will navigate to settings directly
-    logger.debug(logging_config.block(f"Unknown page after login: {page.url} – treating as authenticated"))
-    return True
+    # unknown page – wait briefly and re-check before treating as unauthenticated
+    page.wait_for_timeout(2000)
+    if "/login" in page.url:
+        logger.error(logging_config.block("Redirected back to login page after unknown page."))
+        return False
+    if _is_authenticated(page):
+        return True
+
+    logger.error(logging_config.block(f"Unknown page after login: {page.url} – treating as unauthenticated"))
+    return False
+
+
+def _wait_for_authenticated(page, timeout=LOGIN_TIMEOUT_SECONDS) :
+    # wait until the current page is a known authenticated GitHub page
+    # returns True on success, False if login is required or the timeout expires
+    deadline = time.time() + timeout
+    while time.time() < deadline :
+        if _is_authenticated(page) :
+            return True
+        if "/login" in page.url :
+            logger.error(logging_config.block("Redirected to login during authentication."))
+            return False
+        if "two-factor" in page.url :
+            logger.error(logging_config.block("Still on two-factor page after TOTP submission."))
+            return False
+
+        # if we are on a known security challenge, attempt to dismiss it
+        handled_challenge = False
+        for pattern in CHALLENGE_URL_PATTERNS :
+            prefix = pattern.replace("**/", "/").replace("*", "")
+            if urlparse(page.url).path.startswith(prefix) :
+                if not _handle_challenges(page) :
+                    return False
+                handled_challenge = True
+                break
+        if not handled_challenge :
+            page.wait_for_timeout(1000)
+
+    logger.error(logging_config.block("Timed out waiting for authenticated GitHub page."))
+    return _is_authenticated(page)
 
 
 def _login(page) : # 2.  
@@ -229,25 +276,24 @@ def _login(page) : # 2.
         logger.debug(logging_config.block("No 2FA challenge detected"))
 
     # 2c. 
-    # handle any post-login security challenges
-    if not _handle_challenges(page) :
+    # wait until we are definitely authenticated or fail clearly
+    if not _wait_for_authenticated(page) :
         _save_debug_artifacts(page, "login_failure")
         raise RuntimeError(
-            "Failed to complete login. A security challenge may require manual action. "
-            "Check the saved debug artifacts (screenshot and HTML) for more details."
+            "Failed to complete login. GitHub authentication did not reach dashboard/settings. "
+            "Check credentials, 2FA, and saved debug artifacts for details."
         )
-    # final verification – we should not be on login page anymore
-    if "/login" in page.url :
-        _save_debug_artifacts(page, "login_failure")
-        raise RuntimeError(f"Login failed. Current URL: {page.url}")
 
     logger.debug(logging_config.label_value("Successfully authenticated and reached", page.url))
 
     # wait a few seconds for the session/cookies to settle before page traversal.
     time.sleep(LOGIN_SETTLE_SECONDS)
 
-    # ppen the profile settings page directly now that credentials are stored.
+    # open the profile settings page directly now that credentials are stored.
     page.goto(GITHUB_SETTINGS_PROFILE_URL, wait_until="domcontentloaded")
+    if "/login" in page.url :
+        _save_debug_artifacts(page, "settings_login_redirect")
+        raise RuntimeError(f"Authentication failed after opening settings. Current URL: {page.url}")
     logger.debug(logging_config.label_value("Opened settings profile page after login", page.url))
 
 
@@ -261,6 +307,14 @@ def _upload_profile_picture(page, image_path) : # 3.
     if page.url.rstrip("/") != GITHUB_SETTINGS_PROFILE_URL.rstrip("/"):
         page.goto(GITHUB_SETTINGS_PROFILE_URL, wait_until="domcontentloaded")
     page.wait_for_load_state("domcontentloaded")
+
+    # if we are not authenticated, GitHub will redirect settings to login
+    if "/login" in page.url :
+        _save_debug_artifacts(page, "settings_auth_failure")
+        raise RuntimeError(
+            f"Not authenticated. Current URL: {page.url}. Check credentials and 2FA."
+        )
+
     # wait for the avatar element to ensure the page is fully rendered
     try :
         page.wait_for_selector("img.avatar", timeout=15000)

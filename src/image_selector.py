@@ -1,51 +1,29 @@
 #   src/image_selector.py
 
 # --- Imports ---
-import random
 import logging
-from pathlib import Path
 import config
 import pinterest_api
 import logging_config
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
-
-
-def _get_local_images() :
-    # return all local image files in the configured profile picture directory."""
-    if not config.PROFILE_PICTURE_DIR.exists():
-        return []
-    return [
-        p for p in config.PROFILE_PICTURE_DIR.iterdir()
-        if p.suffix.lower() in SUPPORTED_EXTENSIONS
-    ]
 
 def select_image() :
-    # select a profile picture source
-
-    # if PINTEREST_SOURCE_BOARD is set, fetch a random pin image from that board
-    # else (or if Pinterest fails), fall back to local images
-    
-    # returns a URL string (for Pinterest) or a file path (for local)
-    if config.PINTEREST_SOURCE_BOARD :
-        try :
-            board_data = pinterest_api.fetch_board_data(config.PINTEREST_SOURCE_BOARD)
-            images = board_data.get("pinImages", [])
-            if images :
-                url = pinterest_api.get_random_pin_image(images)
-                logger.info(logging_config.label_value("Selected Pinterest image", url))
-                return url
-        except Exception as err :
-            logger.warning(logging_config.label_value("Pinterest selection failed, falling back to local", err))
-
-    local_images = _get_local_images()
-    if not local_images :
+    # select a profile picture source from the configured Pinterest board.
+    # no longer falls back to local images; 
+    # expected to use a public Pinterest board as only image source
+    if not config.PINTEREST_SOURCE_BOARD :
         raise RuntimeError(
-            "No local profile pictures found in "
-            f"{config.PROFILE_PICTURE_DIR} and Pinterest selection failed."
+            "PINTEREST_SOURCE_BOARD is not set. "
+            "Please configure it in GitHub Actions variables or in your local .env file."
         )
-    selected = random.choice(local_images)
-    logger.info(logging_config.label_value("Selected local image", selected))
-    return str(selected)
+
+    board_data = pinterest_api.fetch_board_data(config.PINTEREST_SOURCE_BOARD)
+    images = board_data.get("pinImages", [])
+    if not images :
+        raise RuntimeError("No pin images found in the Pinterest board.")
+
+    url = pinterest_api.get_random_pin_image(images)
+    logger.info(logging_config.label_value("Selected Pinterest image", url))
+    return url
