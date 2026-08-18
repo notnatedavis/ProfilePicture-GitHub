@@ -1,6 +1,6 @@
 # .github/workflows/update-profile-picture.yml
 
-name: runWorkflow (Test4)
+name: runWorkflow (TestX)
 
 on:
   schedule:

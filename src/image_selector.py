@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 import config
 import pinterest_api
+import logging_config
 
 logger = logging.getLogger(__name__)
 
@@ -34,10 +35,10 @@ def select_image() :
             images = board_data.get("pinImages", [])
             if images :
                 url = pinterest_api.get_random_pin_image(images)
-                logger.info("Selected Pinterest image: %s", url)
+                logger.info(logging_config.label_value("Selected Pinterest image", url))
                 return url
         except Exception as err :
-            logger.warning("Pinterest selection failed, falling back to local: %s", err)
+            logger.warning(logging_config.label_value("Pinterest selection failed, falling back to local", err))
 
     local_images = _get_local_images()
     if not local_images :
@@ -46,5 +47,5 @@ def select_image() :
             f"{config.PROFILE_PICTURE_DIR} and Pinterest selection failed."
         )
     selected = random.choice(local_images)
-    logger.info("Selected local image: %s", selected)
+    logger.info(logging_config.label_value("Selected local image", selected))
     return str(selected)

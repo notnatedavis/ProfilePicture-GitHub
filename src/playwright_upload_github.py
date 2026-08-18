@@ -13,6 +13,7 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 import config
 import image_processor
 import image_selector
+import logging_config
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +69,8 @@ COORD_SAVE_BUTTON = (200, 400) # Click on "Set new profile picture"
 
 # --- Avatar comparison ---
 GITHUB_AVATAR_SIZE = 512
-MAX_IDENTICAL_ATTEMPTS = 3
-AVATAR_COMPARISON_CONFIDENCE = 0.95  # 95% similarity required to be considered identical
+MAX_IDENTICAL_ATTEMPTS = 5
+AVATAR_COMPARISON_CONFIDENCE = 0.65  # 65% similarity required to be considered identical
 
 
 def _generate_totp_code() :
@@ -83,7 +84,7 @@ def _generate_totp_code() :
         return pyotp.TOTP(config.GH_TOTP_SECRET).now()
     # if generation fails, log a warning and return None
     except Exception as err:
-        logger.warning("Failed to generate TOTP code: %s", err)
+        logger.warning(logging_config.label_value("Failed to generate TOTP code", err))
         return None
 
 
@@ -112,14 +113,14 @@ def _scrape_current_avatar_url(page) :
         if avatar_src :
             return _set_avatar_size(avatar_src)
     except PlaywrightTimeoutError :
-        logger.warning("Avatar element not found, falling back to public profile URL")
+        logger.warning(logging_config.block("Avatar element not found, falling back to public profile URL"))
     return f"https://github.com/{config.GH_USERNAME}.png?s={GITHUB_AVATAR_SIZE}"
 
 
 def _load_current_avatar_image(page) :
     # fetch and load the current GitHub profile picture at 512x512
     avatar_url = _scrape_current_avatar_url(page)
-    logger.info("Current avatar URL: %s", avatar_url)
+    logger.info(logging_config.label_value("Current avatar URL", avatar_url))
     return image_processor.load_image(avatar_url)
 
 
@@ -137,10 +138,10 @@ def _save_debug_artifacts(page, prefix="failure"):
         page.screenshot(path=screenshot_path, full_page=True)
         with open(html_path, "w", encoding="utf-8") as f:
             f.write(page.content())
-        logger.info("Debug artifacts saved: %s and %s", screenshot_path, html_path)
+        logger.info(logging_config.block(f"Debug artifacts saved: {screenshot_path} and {html_path}"))
     # if artifact saving fails, log a warning instead of crashing
     except Exception as e:
-        logger.warning("Could not save debug artifacts: %s", e)
+        logger.warning(logging_config.label_value("Could not save debug artifacts", e))
 
 
 def _handle_challenges(page):
@@ -152,19 +153,19 @@ def _handle_challenges(page):
 
     # if redirected back to login, authentication failed
     if "/login" in page.url:
-        logger.error("Redirected back to login page – authentication failed.")
+        logger.error(logging_config.block("Redirected back to login page – authentication failed."))
         return False
 
     # if on dashboard or settings, we are logged in
     if page.url.rstrip("/") in (GITHUB_DASHBOARD_URL.rstrip("/"), GITHUB_SETTINGS_PROFILE_URL.rstrip("/")):
-        logger.debug("Logged in successfully (dashboard or settings).")
+        logger.debug(logging_config.block("Logged in successfully (dashboard or settings)."))
         return True
 
     # check known challenge pages
     for pattern in CHALLENGE_URL_PATTERNS:
         prefix = pattern.replace("**/", "/").replace("*", "")
         if urlparse(page.url).path.startswith(prefix):
-            logger.info("Detected challenge page: %s", page.url)
+            logger.info(logging_config.label_value("Detected challenge page", page.url))
 
             # try to click any button that may dismiss the challenge
             buttons = page.locator(
@@ -185,14 +186,14 @@ def _handle_challenges(page):
                 # re-check after navigation
                 return _handle_challenges(page)
             except PlaywrightTimeoutError:
-                logger.warning("Could not automatically dismiss challenge.")
+                logger.warning(logging_config.block("Could not automatically dismiss challenge."))
 
             # if challenge cannot be dismissed, manual intervention is required
-            logger.error("Manual intervention required for challenge: %s", page.url)
+            logger.error(logging_config.label_value("Manual intervention required for challenge", page.url))
             return False
 
     # unknown page – treat as authenticated; _login will navigate to settings directly
-    logger.debug("Unknown page after login: %s – treating as authenticated", page.url)
+    logger.debug(logging_config.block(f"Unknown page after login: {page.url} – treating as authenticated"))
     return True
 
 
@@ -225,7 +226,7 @@ def _login(page) : # 2.
         # wait for the page to settle after 2FA
         page.wait_for_load_state("domcontentloaded")
     except PlaywrightTimeoutError :
-        logger.debug("No 2FA challenge detected")
+        logger.debug(logging_config.block("No 2FA challenge detected"))
 
     # 2c. 
     # handle any post-login security challenges
@@ -240,14 +241,14 @@ def _login(page) : # 2.
         _save_debug_artifacts(page, "login_failure")
         raise RuntimeError(f"Login failed. Current URL: {page.url}")
 
-    logger.debug("Successfully authenticated and reached %s", page.url)
+    logger.debug(logging_config.label_value("Successfully authenticated and reached", page.url))
 
-    # Wait a few seconds for the session/cookies to settle before page traversal.
+    # wait a few seconds for the session/cookies to settle before page traversal.
     time.sleep(LOGIN_SETTLE_SECONDS)
 
-    # Open the profile settings page directly now that credentials are stored.
+    # ppen the profile settings page directly now that credentials are stored.
     page.goto(GITHUB_SETTINGS_PROFILE_URL, wait_until="domcontentloaded")
-    logger.debug("Opened settings profile page after login: %s", page.url)
+    logger.debug(logging_config.label_value("Opened settings profile page after login", page.url))
 
 
 def _upload_profile_picture(page, image_path) : # 3. 
@@ -275,14 +276,14 @@ def _upload_profile_picture(page, image_path) : # 3.
     username = config.GH_USERNAME
     edit_button_name = f"@{username} Edit"
     try:
-        logger.debug(f"Clicking avatar edit button: {edit_button_name}")
+        logger.debug(logging_config.label_value("Clicking avatar edit button", edit_button_name))
         page.get_by_role("button", name=edit_button_name).click(timeout=10000)
     except PlaywrightTimeoutError:
-        logger.warning("Role-based click on edit button failed – trying coordinate fallback.")
+        logger.warning(logging_config.block("Role-based click on edit button failed – trying coordinate fallback."))
         try:
             x, y = COORD_EDIT_BUTTON
             page.mouse.click(x, y)
-            logger.debug(f"Clicked edit button at coordinates ({x}, {y})")
+            logger.debug(logging_config.block(f"Clicked edit button at coordinates ({x}, {y})"))
         except Exception as e:
             _save_debug_artifacts(page, "edit_button_failure")
             raise RuntimeError(f"Failed to click avatar edit button: {e}")
@@ -290,14 +291,14 @@ def _upload_profile_picture(page, image_path) : # 3.
     # 3c. 
     # click the "Upload a photo…" menu item
     try:
-        logger.debug("Clicking 'Upload a photo…' menu item")
+        logger.debug(logging_config.block("Clicking 'Upload a photo…' menu item"))
         page.get_by_role("menuitem", name="Upload a photo…").click(timeout=5000)
     except PlaywrightTimeoutError:
-        logger.warning("Role-based click on upload menu failed – trying coordinate fallback.")
+        logger.warning(logging_config.block("Role-based click on upload menu failed – trying coordinate fallback."))
         try:
             x, y = COORD_UPLOAD_MENU
             page.mouse.click(x, y)
-            logger.debug(f"Clicked upload menu at coordinates ({x}, {y})")
+            logger.debug(logging_config.block(f"Clicked upload menu at coordinates ({x}, {y})"))
         except Exception as e:
             _save_debug_artifacts(page, "upload_menu_failure")
             raise RuntimeError(f"Failed to click 'Upload a photo…' menu item: {e}")
@@ -305,7 +306,7 @@ def _upload_profile_picture(page, image_path) : # 3.
     # 3d. 
     # set the input file by label
     try:
-        logger.debug(f"Setting input file: {image_path}")
+        logger.debug(logging_config.label_value("Setting input file", image_path))
         page.get_by_label("Upload a photo…").set_input_files(str(image_path))
     except Exception as e:
         _save_debug_artifacts(page, "file_input_failure")
@@ -314,21 +315,21 @@ def _upload_profile_picture(page, image_path) : # 3.
     # 3e. 
     # click the "Set new profile picture" button
     try:
-        logger.debug("Clicking 'Set new profile picture' button")
+        logger.debug(logging_config.block("Clicking 'Set new profile picture' button"))
         page.get_by_role("button", name="Set new profile picture").click(timeout=10000)
         page.wait_for_load_state("domcontentloaded")
     except PlaywrightTimeoutError:
-        logger.warning("Role-based click on save button failed – trying coordinate fallback.")
+        logger.warning(logging_config.block("Role-based click on save button failed – trying coordinate fallback."))
         try:
             x, y = COORD_SAVE_BUTTON
             page.mouse.click(x, y)
-            logger.debug(f"Clicked save button at coordinates ({x}, {y})")
+            logger.debug(logging_config.block(f"Clicked save button at coordinates ({x}, {y})"))
             page.wait_for_load_state("domcontentloaded")
         except Exception as e:
             _save_debug_artifacts(page, "save_button_failure")
             raise RuntimeError(f"Failed to click 'Set new profile picture' button: {e}")
 
-    logger.info("Profile picture uploaded through GitHub web UI")
+    logger.info(logging_config.block("Profile picture uploaded through GitHub web UI"))
 
 
 def upload_avatar(image_path) : # 1. - 4.
@@ -341,7 +342,7 @@ def upload_avatar(image_path) : # 1. - 4.
     # determine whether to run in debug mode
     debug_mode = _is_debug_mode()
 
-    # start Playwright and launch a Chromium browser
+    # start Playwright & launch a Chromium browser
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=not debug_mode,
@@ -357,21 +358,21 @@ def upload_avatar(image_path) : # 1. - 4.
             # create a new page with a fixed viewport
             page = browser.new_page(viewport=VIEWPORT)
             if debug_mode:
-                logger.info("Running in debug mode – browser window will appear.")
+                logger.info(logging_config.block("Running in debug mode – browser window will appear."))
 
             # log in to GitHub
             _login(page)
 
-            # --- duplicate-avatar check and re-fetch loop ---
-            # Load the current avatar image from GitHub and center-crop/resize it.
+            # --- duplicate-avatar check + re-fetch loop ---
+            # load the current avatar image from GitHub and center-crop/resize it.
             current_avatar_img = _load_current_avatar_image(page)
             current_avatar_processed = image_processor.process_image(current_avatar_img)
 
-            # Load the candidate image and center-crop/resize it for comparison.
+            # load the candidate image and center-crop/resize it for comparison.
             candidate_img_raw = image_processor.load_image(image_path)
             candidate_img = image_processor.process_image(candidate_img_raw)
 
-            logger.info("Candidate image path: %s", image_path)
+            logger.info(logging_config.label_value("Candidate image path", image_path))
 
             attempts = 0
             while image_processor.images_equal(
@@ -380,12 +381,14 @@ def upload_avatar(image_path) : # 1. - 4.
             ) and attempts < MAX_IDENTICAL_ATTEMPTS :
                 attempts += 1
                 logger.info(
-                    "Selected image is identical to the current avatar; fetching another image "
-                    "(attempt %d/%d)", attempts, MAX_IDENTICAL_ATTEMPTS
+                    logging_config.block(
+                        f"Selected image is identical to the current avatar; fetching another image "
+                        f"(attempt {attempts}/{MAX_IDENTICAL_ATTEMPTS})"
+                    )
                 )
 
                 source = image_selector.select_image()
-                logger.info("Selected replacement candidate: %s", source)
+                logger.info(logging_config.label_value("Selected replacement candidate", source))
                 img = image_processor.load_image(source)
                 processed = image_processor.process_image(img)
 
@@ -411,7 +414,7 @@ def upload_avatar(image_path) : # 1. - 4.
             _upload_profile_picture(page, image_path)
 
             # log success before cleanup and browser close
-            logger.info("Profile picture update completed successfully")
+            logger.info(logging_config.block("Profile picture update completed successfully"))
 
         except Exception as e :
             # on any error, try to save debug artifacts
@@ -427,11 +430,11 @@ def upload_avatar(image_path) : # 1. - 4.
                     if path.exists() :
                         path.unlink()
                 except Exception :
-                    logger.warning("Could not clean up temporary file %s", path)
+                    logger.warning(logging_config.label_value("Could not clean up temporary file", path))
 
             # keep browser open briefly in debug mode, then close
             if debug_mode:
-                logger.info("Debug mode: browser will close in 10 seconds. Press Ctrl+C to abort.")
+                logger.info(logging_config.block("Debug mode: browser will close in 10 seconds. Press Ctrl+C to abort."))
                 time.sleep(10)
             browser.close()
-            logger.debug("Browser closed")
+            logger.debug(logging_config.block("Browser closed"))

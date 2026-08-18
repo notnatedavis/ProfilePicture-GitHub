@@ -60,8 +60,8 @@ This repository automates updating your GitHub profile picture on an interval (e
 
 2. Set up environment
    ```bash
-   pyenv install 3.12.13 # if not already installed
-   pyenv local 3.12.13   # sets in use
+   pyenv install 3.12.10 # if not already installed
+   pyenv local 3.12.10   # sets in use
 
    python -m venv venv312
    
@@ -109,12 +109,12 @@ ProfilePicture-GitHub/
 ├── src/
 │   ├── __init__.py
 │   ├── config.py
-│   ├── github_client.py
 │   ├── image_processor.py
 │   ├── image_selector.py
+│   ├── logging_config.py
 │   ├── main.py
 │   ├── pinterest_api.py
-│   └── web_uploader.py
+│   └── playwright_upload_github.py
 │ 
 ├── .env.example
 ├── .gitignore

@@ -7,6 +7,7 @@ from pathlib import Path
 import requests
 from PIL import Image, ImageChops
 import config
+import logging_config
 
 logger = logging.getLogger(__name__)
 
@@ -14,11 +15,11 @@ def load_image(source) :
     # load an image from either a URL or a local file path
     source = str(source)  # accept Path objects and strings
     if source.startswith(("http://", "https://")):
-        logger.debug("Downloading image from %s", source)
+        logger.debug(logging_config.label_value("Downloading image from", source))
         resp = requests.get(source, timeout=15)
         resp.raise_for_status()
         return Image.open(BytesIO(resp.content))
-    logger.debug("Opening local image %s", source)
+    logger.debug(logging_config.label_value("Opening local image", source))
     return Image.open(source)
  
 def process_image(img) :

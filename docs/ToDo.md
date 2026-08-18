@@ -1,15 +1,5 @@
 # To Do :
 
-- update src/web_uploader.py
-    - get all coords for points of process
-        - pt1 : login (done)
-        - pt2 : post-login -> .com/settings/profile
-        - pt3 : edit
-        - pt4 : Edit -> Upload
-        - pt5 : Upload -> fetched image
-    - remove old page.locator logic
-    - set to open of defined size & zoom
-    - test locally prior to workflows & headerless
-
+- github actions test 1x/24hours
 - clean up all files & get functioning
 - extend same idea / functionality to other projects (LinkedIn, Instagram, etc.)

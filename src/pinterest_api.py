@@ -7,6 +7,7 @@ import logging
 import requests
 import xml.etree.ElementTree as ET
 from urllib.parse import urlparse
+import logging_config
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,6 @@ def parse_board_url(board_url) :
         pass
     return None
 
-
 def _extract_image_urls(description_text) :
     # extract all image src URLs from an RSS item description
     if not description_text :
@@ -81,35 +81,35 @@ def fetch_board_data(board_url) :
 
     cached = _get_cached(cache_key)
     if cached :
-        logger.debug("Using cached data for %s", cache_key)
+        logger.debug(logging_config.label_value("Using cached data for", cache_key))
         return cached
 
     if not _should_retry(cache_key) :
         if cached :
-            logger.debug("Backoff active for %s, serving stale cache", cache_key)
+            logger.debug(logging_config.block(f"Backoff active for {cache_key}, serving stale cache"))
             return cached
-        logger.debug("Backoff active for %s, no cache – throwing", cache_key)
+        logger.debug(logging_config.block(f"Backoff active for {cache_key}, no cache – throwing"))
         raise RuntimeError("Too many requests – cooling down")
 
     rss_url = f"https://www.pinterest.com/{username}/{board_name}.rss"
-    logger.debug("Fetching RSS feed from %s", rss_url)
+    logger.debug(logging_config.label_value("Fetching RSS feed from", rss_url))
 
     try :
         resp = requests.get(rss_url, timeout=10)
         resp.raise_for_status()
         xml_text = resp.text
     except requests.RequestException as err :
-        logger.error("Failed to fetch RSS feed: %s", err)
+        logger.error(logging_config.label_value("Failed to fetch RSS feed", err))
         _record_failure(cache_key)
         if cached :
-            logger.debug("Serving stale cache after fetch error")
+            logger.debug(logging_config.block("Serving stale cache after fetch error"))
             return cached
         raise RuntimeError(f"Unable to load board RSS feed: {err}")
 
     try :
         root = ET.fromstring(xml_text)
     except ET.ParseError as err :
-        logger.error("XML parsing failed: %s", err)
+        logger.error(logging_config.label_value("XML parsing failed", err))
         _record_failure(cache_key)
         if cached :
             return cached
@@ -117,7 +117,7 @@ def fetch_board_data(board_url) :
 
     channel_title = root.findtext("channel/title", default=board_name).strip()
     items = root.findall(".//item")
-    logger.debug("Found %d items in RSS feed", len(items))
+    logger.debug(logging_config.label_value("Found items in RSS feed", len(items)))
     if not items :
         _record_failure(cache_key)
         if cached :
@@ -134,7 +134,7 @@ def fetch_board_data(board_url) :
         url for url in all_images if "pinimg.com" in url
     ))
 
-    logger.debug("Total unique Pinterest images found: %d", len(pin_images))
+    logger.debug(logging_config.label_value("Total unique Pinterest images found", len(pin_images)))
     if not pin_images :
         _record_failure(cache_key)
         if cached:
