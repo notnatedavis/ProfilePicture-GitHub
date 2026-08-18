@@ -46,14 +46,17 @@ GITHUB_DASHBOARD_URL = "https://github.com/"
 GITHUB_SETTINGS_PROFILE_URL = "https://github.com/settings/profile"
 TWO_FACTOR_URL_PATTERN = "**/sessions/two-factor*"
 CHALLENGE_URL_PATTERNS = [
-    "**/sessions/verify*", # Verify your account
-    "**/sessions/device*", # Device verification
-    "**/sessions/phone*",  # Phone verification
+    "**/sessions/verify*",            # Verify your account
+    "**/sessions/device*",            # Device verification (older URL style)
+    "**/sessions/verified-device*",   # Device verification (newer URL style)
+    "**/sessions/device-verification*",  # Device verification alternate
+    "**/sessions/verify-device*",     # Device verification alternate
+    "**/sessions/phone*",             # Phone verification
 ]
 
 # --- Post-login navigation ---
-LOGIN_SETTLE_SECONDS = 4  # seconds to wait after login before navigating to settings
-LOGIN_TIMEOUT_SECONDS = 20  # total time to wait for a fully authenticated page
+LOGIN_SETTLE_SECONDS = 4          # seconds to wait after login before navigating to settings
+LOGIN_TIMEOUT_SECONDS = 30        # total time to wait for a fully authenticated page
 
 # --- Viewport and browser configuration ---
 # Use the exact same viewport locally and in GitHub Actions so coordinate
@@ -202,15 +205,8 @@ def _handle_challenges(page):
             logger.error(logging_config.label_value("Manual intervention required for challenge", page.url))
             return False
 
-    # unknown page – wait briefly and re-check before treating as unauthenticated
-    page.wait_for_timeout(2000)
-    if "/login" in page.url:
-        logger.error(logging_config.block("Redirected back to login page after unknown page."))
-        return False
-    if _is_authenticated(page):
-        return True
-
-    logger.error(logging_config.block(f"Unknown page after login: {page.url} – treating as unauthenticated"))
+    # unknown page – treat as not yet authenticated; caller will continue waiting
+    logger.debug(logging_config.block(f"Unknown page after login: {page.url}"))
     return False
 
 
@@ -219,8 +215,11 @@ def _wait_for_authenticated(page, timeout=LOGIN_TIMEOUT_SECONDS) :
     # returns True on success, False if login is required or the timeout expires
     deadline = time.time() + timeout
     while time.time() < deadline :
+        # already authenticated?
         if _is_authenticated(page) :
             return True
+
+        # definitely not authenticated
         if "/login" in page.url :
             logger.error(logging_config.block("Redirected to login during authentication."))
             return False
@@ -228,17 +227,17 @@ def _wait_for_authenticated(page, timeout=LOGIN_TIMEOUT_SECONDS) :
             logger.error(logging_config.block("Still on two-factor page after TOTP submission."))
             return False
 
-        # if we are on a known security challenge, attempt to dismiss it
-        handled_challenge = False
-        for pattern in CHALLENGE_URL_PATTERNS :
-            prefix = pattern.replace("**/", "/").replace("*", "")
-            if urlparse(page.url).path.startswith(prefix) :
-                if not _handle_challenges(page) :
-                    return False
-                handled_challenge = True
-                break
-        if not handled_challenge :
-            page.wait_for_timeout(1000)
+        # try to dismiss any known security challenge
+        # if the helper returns False, we keep waiting because the page may
+        # eventually navigate on its own (e.g., after an email code is entered
+        # externally, although this is unlikely in CI).
+        if _handle_challenges(page) :
+            # helper signalled success by returning True; verify directly
+            if _is_authenticated(page) :
+                return True
+
+        # avoid busy-looping
+        page.wait_for_timeout(1000)
 
     logger.error(logging_config.block("Timed out waiting for authenticated GitHub page."))
     return _is_authenticated(page)
@@ -281,7 +280,9 @@ def _login(page) : # 2.
         _save_debug_artifacts(page, "login_failure")
         raise RuntimeError(
             "Failed to complete login. GitHub authentication did not reach dashboard/settings. "
-            "Check credentials, 2FA, and saved debug artifacts for details."
+            "Check credentials, 2FA, and saved debug artifacts for details. "
+            "If GitHub is asking for device verification (email code), you must either "
+            "pre-authenticate the runner or disable device verification for your account."
         )
 
     logger.debug(logging_config.label_value("Successfully authenticated and reached", page.url))
